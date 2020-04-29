@@ -7,7 +7,6 @@ https://machinelearningmastery.com/time-series-forecasting-long-short-term-memor
 
 # load and plot dataset
 import os, pathlib, math, sklearn, keras, scipy
-# import tensorflow as tf
 import numpy as np
 from pandas import DataFrame as df
 from pandas import datetime, read_csv, concat, Series
@@ -18,6 +17,7 @@ from keras.layers import Dense
 from keras.layers import LSTM
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
+from random import randint
 from math import *
 
 directory = '/Users/yilinzheng/Documents/2020/Capstone/Tutorial/'
@@ -107,7 +107,9 @@ supervised_values = supervised.values
 # print(supervised.head())
  
 # split data into train and test-sets
-train_data, test_data = supervised_values[0:-12], supervised_values[-12:]
+test_size = randint(len(raw_values)/2,len(raw_values))
+train_data, test_data = supervised_values[0:-test_size], supervised_values[-test_size:]
+raw_train, raw_test = raw_values[0:-test_size], raw_values[-test_size:]
 
 # transform the scale of the data
 scaler, train_scaled, test_scaled = scale(train_data, test_data)
@@ -117,11 +119,6 @@ lstm_model = fit_lstm(train_scaled, 1, 1500, 1) # Q: how to choose epochs?
 # forecast the entire training dataset to build up state for forecasting
 train_reshaped = train_scaled[:, 0].reshape(len(train_scaled), 1, 1)
 lstm_model.predict(train_reshaped, batch_size=1)
-print(len(train_data))
-print(len(test_data))
-print(len(train_scaled))
-print(len(test_scaled))
-print(len(raw_values))
 
 # walk-forward validation on the test data
 predictions = list()
@@ -129,20 +126,24 @@ for i in range(len(test_scaled)):
     # make one-step forecast
     X, y = test_scaled[i, 0:-1], test_scaled[i, -1]
     yhat = forecast_lstm(lstm_model, 1, X)
+    # yhat = y # perfect result
     # invert scaling
     yhat = scale_back(scaler, X, yhat)
     # invert differencing
     yhat = inverse_difference(raw_values, yhat, len(test_scaled)+1-i)
     # store forecast
     predictions.append(yhat)
-    expected = raw_values[len(train_data)+i+1]
+    expected = raw_test[i]
     print('Month=%d, Predicted=%f, Expected=%f' % (i+1, yhat, expected))
 
-rmse = sqrt(mean_squared_error(raw_values[-12:], predictions)) # root mean sqr error
+rmse = sqrt(mean_squared_error(raw_test, predictions)) # root mean sqr error
 print('RMSE: %.3f' % rmse)
 
 # line plot
-plt.plot(raw_values[-12:])
-plt.plot(predictions)
+fig = plt.figure()
+ax = fig.add_subplot()
+ax.plot(raw_test,label="Expected")
+ax.plot(predictions,label="Prediction")
+ax.legend()
 plt.show()
 
